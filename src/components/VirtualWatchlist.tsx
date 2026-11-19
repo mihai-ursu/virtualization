@@ -1,47 +1,20 @@
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Instrument } from "../data/instruments";
-
-const ROW_HEIGHT = 32;
-const OVERSCAN = 6;
+import { useVirtualWatchlist } from "../hooks/useVirtualWatchlist";
 
 export function VirtualWatchlist({
   instruments,
 }: {
   instruments: Instrument[];
 }) {
-  const [scrollTop, setScrollTop] = useState(0);
-  const rowCount = instruments.length;
-
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [viewportHeight, setViewportHeight] = useState(0);
-
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const measure = () => setViewportHeight(viewport.clientHeight);
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewport);
-
-    return () => observer.disconnect();
-  }, []);
-
-  const bodyHeight = Math.max(0, viewportHeight - ROW_HEIGHT);
-
-  // Keep the range valid if a filter shrinks the list while we're scrolled down.
-  const maxScrollTop = Math.max(0, rowCount * ROW_HEIGHT - bodyHeight);
-  const offset = Math.min(scrollTop, maxScrollTop);
-
-  const start = Math.max(0, Math.floor(offset / ROW_HEIGHT) - OVERSCAN);
-  const end = Math.min(
-    rowCount,
-    Math.ceil((offset + bodyHeight) / ROW_HEIGHT) + OVERSCAN,
-  );
-
-  const topHeight = start * ROW_HEIGHT;
-  const bottomHeight = (rowCount - end) * ROW_HEIGHT;
+  const {
+    viewportRef,
+    handleScroll,
+    visibleRows,
+    ariaRowCount,
+    rowHeight,
+    topHeight,
+    bottomHeight,
+  } = useVirtualWatchlist(instruments);
 
   return (
     <div
@@ -51,14 +24,11 @@ export function VirtualWatchlist({
         overflowX: "hidden",
       }}
       ref={viewportRef}
-      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+      onScroll={handleScroll}
     >
-      <table class="watchlist" aria-rowcount={rowCount + 1}>
+      <table class="watchlist" aria-rowcount={ariaRowCount}>
         <thead>
-          <tr
-            // style={{ height: `${topHeight}px`, padding: 0 }}
-            aria-rowindex={1}
-          >
+          <tr aria-rowindex={1}>
             <th scope="col">Symbol</th>
             <th scope="col">Price</th>
           </tr>
@@ -74,11 +44,11 @@ export function VirtualWatchlist({
             </tr>
           )}
 
-          {instruments.slice(start, end).map((instrument, index) => (
+          {visibleRows.map(({ instrument, ariaRowIndex }) => (
             <tr
               key={instrument.id}
-              style={{ height: `${ROW_HEIGHT}px` }}
-              aria-rowindex={start + index + 2}
+              style={{ height: `${rowHeight}px` }}
+              aria-rowindex={ariaRowIndex}
             >
               <td>{instrument.symbol}</td>
               <td>{(instrument.priceInCents / 100).toFixed(2)}</td>
